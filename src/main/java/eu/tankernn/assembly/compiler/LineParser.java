@@ -35,16 +35,6 @@ public class LineParser {
 			pos++;
 		}
 
-		// Add a literal byte
-		if (instruction[pos].startsWith("$"))
-			try {
-				byte b = parseToByte(instruction[pos]);
-				list.add(b);
-				return listToByteArray(list);
-			} catch (NumberFormatException ex) {
-
-			}
-
 		String command = instruction[pos].toUpperCase();
 
 		switch (command) {
@@ -88,7 +78,14 @@ public class LineParser {
 			addWithoutAddress(OPCodes.HLT);
 			break;
 		default:
-			throw new SyntaxErrorException("Commmand not found: " + command + " At line: " + lineIndex);
+			// Try adding as byte before throwing
+			try {
+				byte b = parseToByte(instruction[pos], false);
+				list.add(b);
+				return listToByteArray(list);
+			} catch (NumberFormatException ex) {
+				throw new SyntaxErrorException("Commmand not found: " + command + " At line: " + lineIndex);
+			}
 		}
 
 		return listToByteArray(list);
@@ -105,20 +102,22 @@ public class LineParser {
 	 *            A string with the format <code>$base:value</code>
 	 * @return The byte value represented by the string
 	 */
-	private Byte parseToByte(String s) {
-		String[] sArr = instruction[pos].replace("$", "").split(":");
-		byte b = (byte) Integer.parseInt(sArr[1], Integer.parseInt(sArr[0]));
-		
-		return Assemble.bigEndianData ? reverseByte(b) : b;
+	private Byte parseToByte(String s, boolean isAddress) {
+		byte b;
+		if (s.contains("$")) {
+			String[] sArr = instruction[pos].replace("$", "").split(":");
+			b = (byte) Integer.parseInt(sArr[1], Integer.parseInt(sArr[0]));
+		} else {
+			b = (byte) Integer.parseInt(s);
+		}
+		return Assemble.bigEndianData ? reverseByte(b, isAddress ? 4 : 8) : b;
+
 	}
 
-	private byte reverseByte(byte x) {
-		int intSize = 8;
-		byte y = 0;
-		for (int position = intSize - 1; position > 0; position--) {
-			y += ((x & 1) << position);
-			x >>= 1;
-		}
+	private byte reverseByte(byte x, int wordSize) {
+		System.out.print("Original: " + Assemble.byteToBinaryString(x, wordSize, false));
+		byte y = (byte) (((x & 0xff) >>> 0)<<24);
+		System.out.println(", Reversed: " + Assemble.byteToBinaryString(y, wordSize, false));
 		return y;
 	}
 
@@ -126,7 +125,7 @@ public class LineParser {
 		pos++;
 		byte address;
 		try {
-			address = parseToByte(instruction[pos]);
+			address = parseToByte(instruction[pos], true);
 		} catch (IndexOutOfBoundsException ex) {
 			throw new SyntaxErrorException("Missing address." + " At line: " + lineIndex);
 		}
