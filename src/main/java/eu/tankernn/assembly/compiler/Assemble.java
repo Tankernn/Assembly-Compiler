@@ -9,6 +9,15 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.HashMap;
 
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
+import org.apache.commons.cli.PatternOptionBuilder;
+
 import eu.tankernn.assembly.output.GPIOHandler;
 import eu.tankernn.assembly.output.ParallelOutput;
 
@@ -19,22 +28,19 @@ public class Assemble {
 	static HashMap<String, Byte> labels = new HashMap<String, Byte>();
 	static HashMap<String, Byte> variables = new HashMap<String, Byte>();
 	static byte currentAddress = 0;
-	
+
 	static boolean outputToGPIO = false;
-	static boolean bigEndianData = true;
-	static boolean bigEndianAddress = true;
+	static boolean bigEndianData = false;
+	static boolean bigEndianAddress = false;
+
+	static File fileIn;
+	static File fileOut = null;
 
 	public static void main(String[] args) {
+		parseArguments(args);
+
 		if (outputToGPIO)
 			GPIOHandler.init(new ParallelOutput());
-		
-		File fileIn;
-
-		if (args.length > 0) {
-			fileIn = new File(args[0]);
-		} else {
-			fileIn = new File("data/in.ta");
-		}
 
 		try {
 			in = new BufferedReader(new FileReader(fileIn));
@@ -43,8 +49,7 @@ public class Assemble {
 			return;
 		}
 
-		if (args.length > 1) {
-			File fileOut = new File(args[1]);
+		if (fileOut != null) {
 			if (fileOut.exists()) {
 				log("File " + fileOut.getAbsolutePath() + " already exists, aborting.");
 				return;
@@ -61,12 +66,16 @@ public class Assemble {
 			out = System.out;
 		}
 
+		System.out.println("Compiling file: " + fileIn.getName());
+
 		try {
 			startCompile();
 		} catch (IOException ex) {
 			log("The compiler encountered an error: ");
 			ex.printStackTrace();
 		}
+		if (outputToGPIO)
+			GPIOHandler.cleanUp();
 	}
 
 	public static void startCompile() throws IOException {
@@ -91,22 +100,74 @@ public class Assemble {
 	}
 
 	public static void output(Byte[] bytes) throws IOException {
-		for (int i = 0; i < bytes.length; i++)
-			currentAddress++;
-
 		if (outputToGPIO)
 			GPIOHandler.writeData(bytes);
-		else
-			for (Byte b : bytes)
-				out.println(byteToBinaryString(currentAddress, 4, bigEndianAddress) + " : " + byteToBinaryString(b, 8, false));
+		
+		for (Byte b : bytes) {
+			out.println(
+					byteToBinaryString(currentAddress, 4, bigEndianAddress) + " : " + byteToBinaryString(b, 8, false));
+			currentAddress++;
+		}	
 	}
-	
-	private static String byteToBinaryString(int b, int wordLength, boolean reverse) {
+
+	public static String byteToBinaryString(int b, int wordLength, boolean reverse) {
 		int template = (int) Math.pow(2, wordLength) - 1;
 		StringBuilder result = new StringBuilder();
 		result.append(Integer.toBinaryString((b & template) + template + 0x1).substring(1));
 		if (reverse)
 			result.reverse();
 		return result.toString();
+	}
+
+	private static void parseArguments(String[] args) {
+		Options options = new Options();
+
+		Option input = new Option("i", "input", true, "input file path");
+		input.setRequired(true);
+		input.setType(PatternOptionBuilder.EXISTING_FILE_VALUE);
+		options.addOption(input);
+
+		Option output = new Option("o", "output", true, "output file");
+		output.setRequired(false);
+		output.setType(PatternOptionBuilder.FILE_VALUE);
+		options.addOption(output);
+
+		Option gpio = new Option("g", "gpio", false, "output to GPIO");
+		gpio.setRequired(false);
+		options.addOption(gpio);
+
+		Option bigEndData = new Option("D", "big-endian-data", false, "Flip the data before outputting");
+		bigEndData.setRequired(false);
+		options.addOption(bigEndData);
+
+		Option bigEndAddress = new Option("A", "big-endian-address", false, "Flip the data before outputting");
+		bigEndAddress.setRequired(false);
+		options.addOption(bigEndAddress);
+
+		CommandLineParser parser = new DefaultParser();
+		HelpFormatter formatter = new HelpFormatter();
+		CommandLine cmd;
+
+		try {
+			cmd = parser.parse(options, args);
+		} catch (ParseException e) {
+			System.out.println(e.getMessage());
+			formatter.printHelp("utility-name", options);
+
+			System.exit(1);
+			return;
+		}
+
+		outputToGPIO = cmd.hasOption("gpio");
+		bigEndianData = cmd.hasOption("big-endian-data");
+		bigEndianAddress = cmd.hasOption("big-endian-address");
+
+		try {
+			fileIn = (File) cmd.getParsedOptionValue("input");
+			if (cmd.hasOption("output"))
+				fileOut = (File) cmd.getParsedOptionValue("output");
+		} catch (ParseException e) {
+			e.printStackTrace();
+		}
 	}
 }

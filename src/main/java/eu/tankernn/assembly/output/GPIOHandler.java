@@ -13,7 +13,7 @@ public class GPIOHandler {
 	static final Pin WRITE_PIN = RaspiPin.GPIO_26;
 	private static DataOutputMethod dom;
 
-	static GpioPinDigitalOutput[] addressOutputPins = new GpioPinDigitalOutput[8];
+	static GpioPinDigitalOutput[] addressOutputPins = new GpioPinDigitalOutput[ADDRESS_PINS.length];
 	static GpioPinDigitalOutput writePin;
 
 	// create GPIO controller instance
@@ -25,25 +25,36 @@ public class GPIOHandler {
 		dom = method;
 		dom.init(GPIO);
 
-		for (int i = 0; i < addressOutputPins.length; i++)
+		for (int i = 0; i < addressOutputPins.length; i++) {
 			addressOutputPins[i] = GPIO.provisionDigitalOutputPin(ADDRESS_PINS[i], "Address pin " + i, PinState.LOW);
-
+			addressOutputPins[i].setShutdownOptions(true, PinState.LOW);
+		}
 		writePin = GPIO.provisionDigitalOutputPin(WRITE_PIN, "Write pin", PinState.HIGH);
+		writePin.setShutdownOptions(true, PinState.HIGH);
 	}
 
 	public static void writeData(Byte[] bytes) {
 		for (byte b : bytes) {
 			// Output address
 			for (int i = 0; i < addressOutputPins.length; i++) {
-				addressOutputPins[i].setState((currentAddress & 1 << i) == 1);
+				addressOutputPins[i].setState((currentAddress++ & 1 << i) == 1);
 			}
-			currentAddress++;
 
 			// Output data
 			dom.output(b);
 
 			// Pulse write pin
-			writePin.pulse(10);
+			writePin.pulse(10, PinState.LOW, true);
+			
+			try {
+				Thread.sleep(50);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
 		}
+	}
+	
+	public static void cleanUp() {
+		GPIO.shutdown();
 	}
 }
