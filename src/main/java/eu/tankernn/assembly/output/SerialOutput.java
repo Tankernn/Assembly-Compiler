@@ -11,7 +11,7 @@ public class SerialOutput implements DataOutputMethod {
 	private static final Pin DATA_CLOCK_PIN = RaspiPin.GPIO_02;
 	private GpioPinDigitalOutput dataOutputPin;
 	private GpioPinDigitalOutput dataClockPin;
-	
+
 	@Override
 	public void init(GpioController GPIO) {
 		dataOutputPin = GPIO.provisionDigitalOutputPin(DATA_PIN, "Data pin", PinState.LOW);

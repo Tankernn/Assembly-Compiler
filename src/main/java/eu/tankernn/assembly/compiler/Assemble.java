@@ -102,12 +102,12 @@ public class Assemble {
 	public static void output(Byte[] bytes) throws IOException {
 		if (outputToGPIO)
 			GPIOHandler.writeData(bytes);
-		
+
 		for (Byte b : bytes) {
 			out.println(
 					byteToBinaryString(currentAddress, 4, bigEndianAddress) + " : " + byteToBinaryString(b, 8, false));
 			currentAddress++;
-		}	
+		}
 	}
 
 	public static String byteToBinaryString(int b, int wordLength, boolean reverse) {

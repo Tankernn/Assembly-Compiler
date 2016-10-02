@@ -45,7 +45,7 @@ public class GPIOHandler {
 
 			// Pulse write pin
 			writePin.pulse(10, PinState.LOW, true);
-			
+
 			try {
 				Thread.sleep(50);
 			} catch (InterruptedException e) {
@@ -53,7 +53,7 @@ public class GPIOHandler {
 			}
 		}
 	}
-	
+
 	public static void cleanUp() {
 		GPIO.shutdown();
 	}

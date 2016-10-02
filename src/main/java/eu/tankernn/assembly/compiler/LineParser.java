@@ -116,7 +116,7 @@ public class LineParser {
 
 	private byte reverseByte(byte x, int wordSize) {
 		System.out.print("Original: " + Assemble.byteToBinaryString(x, wordSize, false));
-		byte y = (byte) (((x & 0xff) >>> 0)<<24);
+		byte y = (byte) (((x & 0xff) >>> 0) << 24);
 		System.out.println(", Reversed: " + Assemble.byteToBinaryString(y, wordSize, false));
 		return y;
 	}
