@@ -105,18 +105,14 @@ public class Assemble {
 
 		for (Byte b : bytes) {
 			out.println(
-					byteToBinaryString(currentAddress, 4, bigEndianAddress) + " : " + byteToBinaryString(b, 8, false));
+					byteToBinaryString(bigEndianAddress ? Util.reverseByte(currentAddress, 4) : currentAddress, 4) + " : " + byteToBinaryString(b, 8));
 			currentAddress++;
 		}
 	}
 
-	public static String byteToBinaryString(int b, int wordLength, boolean reverse) {
+	public static String byteToBinaryString(int b, int wordLength) {
 		int template = (int) Math.pow(2, wordLength) - 1;
-		StringBuilder result = new StringBuilder();
-		result.append(Integer.toBinaryString((b & template) + template + 0x1).substring(1));
-		if (reverse)
-			result.reverse();
-		return result.toString();
+		return Integer.toBinaryString((b & template) + template + 0x1).substring(1);
 	}
 
 	private static void parseArguments(String[] args) {

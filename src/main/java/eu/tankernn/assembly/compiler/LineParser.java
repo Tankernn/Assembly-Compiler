@@ -110,15 +110,7 @@ public class LineParser {
 		} else {
 			b = (byte) Integer.parseInt(s);
 		}
-		return Assemble.bigEndianData ? reverseByte(b, isAddress ? 4 : 8) : b;
-
-	}
-
-	private byte reverseByte(byte x, int wordSize) {
-		System.out.print("Original: " + Assemble.byteToBinaryString(x, wordSize, false));
-		byte y = (byte) (((x & 0xff) >>> 0) << 24);
-		System.out.println(", Reversed: " + Assemble.byteToBinaryString(y, wordSize, false));
-		return y;
+		return Assemble.bigEndianData ? Util.reverseByte(b, isAddress ? 4 : 8) : b;
 	}
 
 	private void addWithAddress(byte OPCode) throws SyntaxErrorException {
