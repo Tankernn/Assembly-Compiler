@@ -1,5 +1,8 @@
 package eu.tankernn.assembly.output;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import com.pi4j.io.gpio.GpioController;
 import com.pi4j.io.gpio.GpioFactory;
 import com.pi4j.io.gpio.GpioPinDigitalOutput;
@@ -7,28 +10,30 @@ import com.pi4j.io.gpio.Pin;
 import com.pi4j.io.gpio.PinState;
 import com.pi4j.io.gpio.RaspiPin;
 
+import eu.tankernn.assembly.compiler.Assemble;
+import eu.tankernn.assembly.compiler.Util;
+
 public class GPIOHandler {
-
-	static final Pin[] ADDRESS_PINS = { RaspiPin.GPIO_22, RaspiPin.GPIO_23, RaspiPin.GPIO_24, RaspiPin.GPIO_25 };
+	private static final Logger LOG = LogManager.getLogger();
+	
 	static final Pin WRITE_PIN = RaspiPin.GPIO_26;
-	private static DataOutputMethod dom;
-
-	static GpioPinDigitalOutput[] addressOutputPins = new GpioPinDigitalOutput[ADDRESS_PINS.length];
 	static GpioPinDigitalOutput writePin;
-
-	// create GPIO controller instance
-	static final GpioController GPIO = GpioFactory.getInstance();
+	
+	private static OutputMethod dataOutput, addressOutput;
+	static GpioController GPIO;
 
 	static byte currentAddress;
 
-	public static void init(DataOutputMethod method) {
-		dom = method;
-		dom.init(GPIO);
-
-		for (int i = 0; i < addressOutputPins.length; i++) {
-			addressOutputPins[i] = GPIO.provisionDigitalOutputPin(ADDRESS_PINS[i], "Address pin " + i, PinState.LOW);
-			addressOutputPins[i].setShutdownOptions(true, PinState.LOW);
-		}
+	public static void init(OutputMethod dataMethod, OutputMethod addressMethod) {
+		// create GPIO controller instance
+		GPIO = GpioFactory.getInstance();
+		
+		dataOutput = dataMethod;
+		dataOutput.init(GPIO);
+		
+		addressOutput = addressMethod;
+		addressOutput.init(GPIO);
+		
 		writePin = GPIO.provisionDigitalOutputPin(WRITE_PIN, "Write pin", PinState.HIGH);
 		writePin.setShutdownOptions(true, PinState.HIGH);
 	}
@@ -36,20 +41,21 @@ public class GPIOHandler {
 	public static void writeData(Byte[] bytes) {
 		for (byte b : bytes) {
 			// Output address
-			for (int i = 0; i < addressOutputPins.length; i++) {
-				addressOutputPins[i].setState((currentAddress++ & 1 << i) == 1);
-			}
+			byte address = Assemble.isBigEndianAddress() ? Util.reverseByte(new Byte(currentAddress), 4) : currentAddress;
+			addressOutput.output(address);
+			currentAddress++;
 
 			// Output data
-			dom.output(b);
+			dataOutput.output(b);
 
 			// Pulse write pin
-			writePin.pulse(10, PinState.LOW, true);
+			writePin.pulse(100, PinState.LOW, true);
 
 			try {
-				Thread.sleep(50);
+				Thread.sleep(100);
 			} catch (InterruptedException e) {
-				e.printStackTrace();
+				LOG.catching(e);
+				return;
 			}
 		}
 	}

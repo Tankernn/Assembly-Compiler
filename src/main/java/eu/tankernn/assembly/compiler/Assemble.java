@@ -1,5 +1,14 @@
 package eu.tankernn.assembly.compiler;
 
+import static com.pi4j.io.gpio.RaspiPin.GPIO_00;
+import static com.pi4j.io.gpio.RaspiPin.GPIO_01;
+import static com.pi4j.io.gpio.RaspiPin.GPIO_02;
+import static com.pi4j.io.gpio.RaspiPin.GPIO_03;
+import static com.pi4j.io.gpio.RaspiPin.GPIO_04;
+import static com.pi4j.io.gpio.RaspiPin.GPIO_05;
+import static com.pi4j.io.gpio.RaspiPin.GPIO_06;
+import static com.pi4j.io.gpio.RaspiPin.GPIO_07;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -17,11 +26,22 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PatternOptionBuilder;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import com.pi4j.io.gpio.Pin;
+import com.pi4j.io.gpio.RaspiPin;
 
 import eu.tankernn.assembly.output.GPIOHandler;
 import eu.tankernn.assembly.output.ParallelOutput;
 
 public class Assemble {
+	private static final Logger LOG = LogManager.getLogger();
+
+	private static final Pin[] DATA_PINS = { GPIO_07, GPIO_00, GPIO_01, GPIO_02, GPIO_03, GPIO_04, GPIO_05, GPIO_06 };
+	private static final Pin[] ADDRESS_PINS = { RaspiPin.GPIO_22, RaspiPin.GPIO_23, RaspiPin.GPIO_24,
+			RaspiPin.GPIO_25 };
+
 	static PrintStream out;
 	static BufferedReader in;
 
@@ -40,45 +60,44 @@ public class Assemble {
 		parseArguments(args);
 
 		if (outputToGPIO)
-			GPIOHandler.init(new ParallelOutput());
+			GPIOHandler.init(new ParallelOutput(DATA_PINS), new ParallelOutput(ADDRESS_PINS));
 
 		try {
 			in = new BufferedReader(new FileReader(fileIn));
 		} catch (FileNotFoundException e) {
-			log("Could not find file " + fileIn.getAbsolutePath());
+			LOG.error("Could not find file {}", fileIn.getAbsolutePath());
 			return;
 		}
 
 		if (fileOut != null) {
 			if (fileOut.exists()) {
-				log("File " + fileOut.getAbsolutePath() + " already exists, aborting.");
+				LOG.error("File {} already exists, aborting.", fileOut.getAbsolutePath());
 				return;
 			} else {
 				try {
 					fileOut.createNewFile();
 					out = new PrintStream(new FileOutputStream(fileOut));
 				} catch (IOException e) {
-					System.err.println("Error creating/opening file " + fileOut.getAbsolutePath());
-					e.printStackTrace();
+					LOG.error("Error creating/opening file " + fileOut.getAbsolutePath());
+					LOG.catching(e);
 				}
 			}
 		} else {
 			out = System.out;
 		}
 
-		System.out.println("Compiling file: " + fileIn.getName());
-
 		try {
 			startCompile();
 		} catch (IOException ex) {
-			log("The compiler encountered an error: ");
-			ex.printStackTrace();
+			LOG.error("The compiler encountered an error.");
+			LOG.catching(ex);
 		}
 		if (outputToGPIO)
 			GPIOHandler.cleanUp();
 	}
 
 	public static void startCompile() throws IOException {
+		LOG.info("Compiling file: {}", fileIn.getName());
 		String line;
 		int index = 0;
 		while ((line = in.readLine()) != null) {
@@ -95,17 +114,13 @@ public class Assemble {
 		labels.put(label, (byte) currentAddress);
 	}
 
-	public static void log(String str) {
-		System.out.println(str);
-	}
-
 	public static void output(Byte[] bytes) throws IOException {
 		if (outputToGPIO)
 			GPIOHandler.writeData(bytes);
 
 		for (Byte b : bytes) {
-			out.println(
-					byteToBinaryString(bigEndianAddress ? Util.reverseByte(currentAddress, 4) : currentAddress, 4) + " : " + byteToBinaryString(b, 8));
+			out.println(byteToBinaryString(bigEndianAddress ? Util.reverseByte(currentAddress, 4) : currentAddress, 4)
+					+ " : " + byteToBinaryString(b, 8));
 			currentAddress++;
 		}
 	}
@@ -132,11 +147,11 @@ public class Assemble {
 		gpio.setRequired(false);
 		options.addOption(gpio);
 
-		Option bigEndData = new Option("D", "big-endian-data", false, "Flip the data before outputting");
+		Option bigEndData = new Option("D", "big-endian-data", false, "reverse the data before outputting");
 		bigEndData.setRequired(false);
 		options.addOption(bigEndData);
 
-		Option bigEndAddress = new Option("A", "big-endian-address", false, "Flip the data before outputting");
+		Option bigEndAddress = new Option("A", "big-endian-address", false, "reverse the address before outputting");
 		bigEndAddress.setRequired(false);
 		options.addOption(bigEndAddress);
 
@@ -147,8 +162,7 @@ public class Assemble {
 		try {
 			cmd = parser.parse(options, args);
 		} catch (ParseException e) {
-			System.out.println(e.getMessage());
-			formatter.printHelp("utility-name", options);
+			formatter.printHelp("tankernn-assembly-compiler", options);
 
 			System.exit(1);
 			return;
@@ -163,7 +177,11 @@ public class Assemble {
 			if (cmd.hasOption("output"))
 				fileOut = (File) cmd.getParsedOptionValue("output");
 		} catch (ParseException e) {
-			e.printStackTrace();
+			LOG.catching(e);
 		}
+	}
+
+	public static boolean isBigEndianAddress() {
+		return bigEndianAddress;
 	}
 }

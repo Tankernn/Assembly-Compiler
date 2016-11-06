@@ -61,7 +61,7 @@ public class LineParser {
 			addWithAddress(OPCodes.NOT_B);
 			break;
 		case "STO":
-			addWithoutAddress(OPCodes.STO);
+			addWithAddress(OPCodes.STO);
 			break;
 		case "OUT":
 			addWithoutAddress(OPCodes.OUT);
@@ -70,7 +70,7 @@ public class LineParser {
 			pos++;
 			switch (instruction[pos]) {
 			case "":
-
+				//TODO Jump instruction
 			}
 			addWithoutAddress(OPCodes.JMP);
 			break;
