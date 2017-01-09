@@ -1,13 +1,6 @@
 package eu.tankernn.assembly.compiler;
 
-import static com.pi4j.io.gpio.RaspiPin.GPIO_00;
-import static com.pi4j.io.gpio.RaspiPin.GPIO_01;
-import static com.pi4j.io.gpio.RaspiPin.GPIO_02;
-import static com.pi4j.io.gpio.RaspiPin.GPIO_03;
-import static com.pi4j.io.gpio.RaspiPin.GPIO_04;
-import static com.pi4j.io.gpio.RaspiPin.GPIO_05;
-import static com.pi4j.io.gpio.RaspiPin.GPIO_06;
-import static com.pi4j.io.gpio.RaspiPin.GPIO_07;
+import static com.pi4j.io.gpio.RaspiPin.*;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -16,6 +9,7 @@ import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.file.Files;
 import java.util.HashMap;
 
 import org.apache.commons.cli.CommandLine;
@@ -26,11 +20,12 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PatternOptionBuilder;
+import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import com.pi4j.io.gpio.Pin;
-import com.pi4j.io.gpio.RaspiPin;
 
 import eu.tankernn.assembly.output.GPIOHandler;
 import eu.tankernn.assembly.output.ParallelOutput;
@@ -39,10 +34,10 @@ public class Assemble {
 	private static final Logger LOG = LogManager.getLogger();
 
 	private static final Pin[] DATA_PINS = { GPIO_07, GPIO_00, GPIO_01, GPIO_02, GPIO_03, GPIO_04, GPIO_05, GPIO_06 };
-	private static final Pin[] ADDRESS_PINS = { RaspiPin.GPIO_22, RaspiPin.GPIO_23, RaspiPin.GPIO_24,
-			RaspiPin.GPIO_25 };
+	private static final Pin[] ADDRESS_PINS = { GPIO_22, GPIO_23, GPIO_24, GPIO_25 };
 
 	static PrintStream out;
+	static FileOutputStream binaryOut;
 	static BufferedReader in;
 
 	static HashMap<String, Byte> labels = new HashMap<String, Byte>();
@@ -76,7 +71,7 @@ public class Assemble {
 			} else {
 				try {
 					fileOut.createNewFile();
-					out = new PrintStream(new FileOutputStream(fileOut));
+					binaryOut = new FileOutputStream(fileOut);
 				} catch (IOException e) {
 					LOG.error("Error creating/opening file " + fileOut.getAbsolutePath());
 					LOG.catching(e);
@@ -86,12 +81,28 @@ public class Assemble {
 			out = System.out;
 		}
 
-		try {
-			startCompile();
-		} catch (IOException ex) {
-			LOG.error("The compiler encountered an error.");
-			LOG.catching(ex);
+		switch (FilenameUtils.getExtension(fileIn.getName())) {
+		// Source file
+		case "ta":
+		case "tas":
+			try {
+				startCompile();
+			} catch (IOException ex) {
+				LOG.error("The compiler encountered an error.");
+				LOG.catching(ex);
+			}
+			break;
+		// Compiled binary file
+		case "tac":
+			try {
+				outputBinary();
+			} catch (IOException e) {
+				LOG.error("The outputter encountered an error.");
+				LOG.catching(e);
+			}
+			break;
 		}
+
 		if (outputToGPIO)
 			GPIOHandler.cleanUp();
 	}
@@ -110,6 +121,11 @@ public class Assemble {
 		}
 	}
 
+	public static void outputBinary() throws IOException {
+		LOG.info("Outputting binary file: {}", fileIn.getName());
+		output(ArrayUtils.toObject(Files.readAllBytes(fileIn.toPath())));
+	}
+
 	public static void addLabel(String label) {
 		labels.put(label, (byte) currentAddress);
 	}
@@ -118,9 +134,14 @@ public class Assemble {
 		if (outputToGPIO)
 			GPIOHandler.writeData(bytes);
 
+		if (binaryOut != null) {
+			binaryOut.write(ArrayUtils.toPrimitive(bytes));
+		}
+
 		for (Byte b : bytes) {
 			out.println(byteToBinaryString(bigEndianAddress ? Util.reverseByte(currentAddress, 4) : currentAddress, 4)
 					+ " : " + byteToBinaryString(b, 8));
+
 			currentAddress++;
 		}
 	}
@@ -168,9 +189,9 @@ public class Assemble {
 			return;
 		}
 
-		outputToGPIO = cmd.hasOption("gpio");
-		bigEndianData = cmd.hasOption("big-endian-data");
-		bigEndianAddress = cmd.hasOption("big-endian-address");
+		outputToGPIO = cmd.hasOption(gpio.getOpt());
+		bigEndianData = cmd.hasOption(bigEndData.getOpt());
+		bigEndianAddress = cmd.hasOption(bigEndAddress.getOpt());
 
 		try {
 			fileIn = (File) cmd.getParsedOptionValue("input");
